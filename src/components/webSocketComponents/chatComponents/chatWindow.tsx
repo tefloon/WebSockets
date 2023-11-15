@@ -1,21 +1,26 @@
 "use client";
-
-import React, { FormEvent, useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useWebSocketContext } from "../webSocketContext";
 import { ChatMessageType } from "@/lib/types";
 import ChatMessageComponent from "./chatMessage";
-import { createId } from "@paralleldrive/cuid2";
 import { flushSync } from "react-dom";
+import ChatSendForm from "./chatSendForm";
 
-export default function ChatWindow() {
+type ChatWindowProps = {
+  username?: string;
+};
+
+export default function ChatWindow({ username = "User" }: ChatWindowProps) {
   const DEFAULT_MAX_VISIBLE_MESSAGES = 20;
   const MAX_MESSAGES_CAP = 40;
 
-  const { send, onMessage } = useWebSocketContext();
+  const { isConnected, send, onMessage, onOpen, onClose, onError } =
+    useWebSocketContext();
 
   const [visibleMessages, setVisibleMessages] = useState(
     DEFAULT_MAX_VISIBLE_MESSAGES
   );
+
   const [chatMessages, setChatMessages] = useState<ChatMessageType[]>([]);
 
   const [currentScrollTop, setCurrentScrollTop] = useState(0);
@@ -26,23 +31,57 @@ export default function ChatWindow() {
 
   const listRef = useRef<HTMLUListElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+
   const chatMessagesRef = useRef(chatMessages);
   const visibleMessagesRef = useRef(visibleMessages);
   const canLoadOlderRef = useRef(canLoadOlder);
   const hasScrolled = useRef(false);
   const isAutoScroll = useRef(true);
 
-  const [userName, setUsername] = useState("");
+  const [userName, setUsername] = useState(username);
 
   // =========== //
   //   EFFECTS   //
   // =========== //
-
   // Assiging random Username
   useEffect(() => {
-    setUsername(`User${Math.floor(Math.random() * 1000)}`);
+    if (userName === "User")
+      setUsername(`User${Math.floor(Math.random() * 1000)}`);
   }, []);
+
+  // Registering new message callback
+  useEffect(() => {
+    const unsubOnMessage = onMessage((event) => {
+      const newMessage: ChatMessageType = JSON.parse(event.data);
+      flushSync(() => {
+        setChatMessages((prevMessages) =>
+          prevMessages
+            ? [...[...prevMessages.slice(-MAX_MESSAGES_CAP + 1), newMessage]]
+            : [newMessage]
+        );
+      });
+      scrollToLastMessage();
+    });
+
+    const unsubOnOpen = onOpen(() => {
+      // setIsConnected(true);
+    });
+
+    const unsubOnClose = onClose(() => {
+      // setIsConnected(false);
+    });
+
+    const unsubOnError = onError(() => {
+      // setIsConnected(false);
+    });
+
+    return () => {
+      unsubOnMessage();
+      unsubOnOpen();
+      unsubOnClose();
+      unsubOnError();
+    };
+  }, [onMessage, onOpen, onClose, onError]);
 
   // Registering event listeners for scrolling
   useEffect(() => {
@@ -77,56 +116,19 @@ export default function ChatWindow() {
     chatMessagesRef.current = chatMessages;
   }, [chatMessages]);
 
+  // Registering the ref to canLoadOld
   useEffect(() => {
     canLoadOlderRef.current = canLoadOlder;
   }, [canLoadOlder]);
 
+  // Registering the ref to visibleMessages
   useEffect(() => {
     visibleMessagesRef.current = visibleMessages;
   }, [visibleMessages]);
 
-  // Registering new message callback
-  useEffect(() => {
-    const unsubscribe = onMessage((event) => {
-      const newMessage: ChatMessageType = JSON.parse(event.data);
-      flushSync(() => {
-        setChatMessages((prevMessages) =>
-          prevMessages
-            ? [...[...prevMessages.slice(-MAX_MESSAGES_CAP + 1), newMessage]]
-            : [newMessage]
-        );
-      });
-      scrollToLastMessage();
-    });
-
-    return () => unsubscribe();
-  }, [onMessage]);
-
-  // =========== //
-  //   HANDLERS  //
-  // =========== //
-
-  const handleSendMessage = (event: FormEvent) => {
-    event.preventDefault();
-
-    if (!inputRef.current) return;
-    if (inputRef.current.value === "") return;
-
-    const messageToSend: ChatMessageType = {
-      id: createId(),
-      userName: userName,
-      message: inputRef.current.value,
-      color: "#adadFF",
-    };
-
-    send(JSON.stringify(messageToSend));
-    inputRef.current.value = "";
-  };
-
   // ============ //
   //   FUNCTIONS  //
   // ============ //
-
   const isAtBottom = (threshold: number) => {
     if (!containerRef.current) return;
     const { scrollTop, clientHeight, scrollHeight } = containerRef.current;
@@ -162,6 +164,10 @@ export default function ChatWindow() {
     }
   };
 
+  const handleSendMessage = (msg: string) => {
+    send(msg);
+  };
+
   const loadOlderMessages = () => {
     if (!canLoadOlderRef.current) return;
     if (!visibleMessagesRef.current) return;
@@ -185,10 +191,10 @@ export default function ChatWindow() {
   const scrollBtnBaseClass =
     "absolute bottom-40 left-1/2 -translate-x-1/2 px-5 py-3 bg-slate-900/25 hover:bg-slate-900/75 rounded-full";
 
-  let scrollBtnClass =
-    currentScrollTop < scrollHeight - clientHeight - 100
-      ? scrollBtnBaseClass
-      : "hidden";
+  // The linebreak is CRUICIAL! Without it we'll be lacking a space
+  const scrollBtnClass = `
+    ${scrollBtnBaseClass} 
+    ${currentScrollTop < scrollHeight - clientHeight - 100 ? "" : "hidden"}`;
 
   return (
     <div className="flex flex-col h-[800px] w-1/3 gap-5 relative">
@@ -215,25 +221,17 @@ export default function ChatWindow() {
       </button>
       <div>
         {/* Sending form */}
-        {/* TODO: Extract form to a separate component */}
-        <form className="flex flex-row" onSubmit={handleSendMessage}>
-          <button className="flex-none bg-slate-900 text-slate-400 p-5 ">
-            Send Message
-          </button>
-          <input
-            className="grow text-xl text-slate-900 bg-slate-400 p-4"
-            type="text"
-            name="chatMessageInput"
-            id="chatMessageInput"
-            ref={inputRef}
-          />
-        </form>
+        <ChatSendForm
+          userName={userName}
+          handleSendMessage={handleSendMessage}
+          isConnected={isConnected}
+        />
       </div>
       <div className="flex flex-row justify-between">
         <span>
           {currentScrollTop} + {clientHeight} = {scrollHeight}
         </span>
-        <span>{hasScrolled.current.toString()}</span>
+        <span>{isConnected.toString()}</span>
         <span>
           {visibleMessages} / {chatMessages.length}
         </span>

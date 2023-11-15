@@ -16,7 +16,7 @@ export default function ChatMessageComponent({
         <span className="text-xs text-slate-600">{id}</span>
       </div>
       <div>
-        <p>{message}</p>
+        <p style={{ whiteSpace: "pre-wrap" }}>{message}</p>
       </div>
     </div>
   );

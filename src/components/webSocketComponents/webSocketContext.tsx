@@ -2,11 +2,15 @@
 
 // WebSocketContext.tsx
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { MessageHandler, useWebSocket } from "./useWebsocket";
+import { MessageHandler, EventHandler, useWebSocket } from "./useWebsocket";
 
 interface WebSocketContextProps {
+  isConnected: boolean;
   send: (message: string) => void;
   onMessage: (handler: MessageHandler) => () => void;
+  onOpen: (handler: EventHandler) => () => void;
+  onClose: (handler: EventHandler) => () => void;
+  onError: (handler: EventHandler) => () => void;
 }
 
 const WebSocketContext = createContext<WebSocketContextProps | null>(null);
@@ -26,10 +30,13 @@ type WebSocketProviderProps = {
 };
 
 export function WebSocketProvider({ children }: WebSocketProviderProps) {
-  const { send, onMessage } = useWebSocket("ws://localhost:8080");
+  const { isConnected, send, onMessage, onOpen, onClose, onError } =
+    useWebSocket("ws://localhost:8080");
 
   return (
-    <WebSocketContext.Provider value={{ send, onMessage }}>
+    <WebSocketContext.Provider
+      value={{ isConnected, send, onMessage, onOpen, onClose, onError }}
+    >
       {children}
     </WebSocketContext.Provider>
   );
