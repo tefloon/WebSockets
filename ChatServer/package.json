@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "@paralleldrive/cuid2": "^2.2.2",
+    "ws": "^8.14.2"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.9"
+  }
+}
