@@ -189,7 +189,7 @@ export default function ChatWindow({ username = "User" }: ChatWindowProps) {
   };
 
   const scrollBtnBaseClass =
-    "absolute bottom-40 left-1/2 -translate-x-1/2 px-5 py-3 bg-slate-900/25 hover:bg-slate-900/75 rounded-full";
+    "absolute bottom-40 left-1/2 -translate-x-1/2 px-5 py-3 bg-slate-900/50 hover:bg-slate-900/75 rounded-full";
 
   // The linebreak is CRUICIAL! Without it we'll be lacking a space
   const scrollBtnClass = `
@@ -197,9 +197,9 @@ export default function ChatWindow({ username = "User" }: ChatWindowProps) {
     ${currentScrollTop < scrollHeight - clientHeight - 100 ? "" : "hidden"}`;
 
   return (
-    <div className="flex flex-col h-[800px] w-1/3 gap-5 relative">
+    <div className="flex flex-col w-1/3 gap-5 relative min-h-[800px]">
       <div
-        className="h-full overflow-y-auto overflow-x-hidden scroll-smooth"
+        className="overflow-y-auto flex-grow overflow-x-hidden"
         ref={containerRef}
       >
         {/* List of messages */}
