@@ -1,9 +1,12 @@
 "use client";
-import React, { useEffect, useRef, useState } from "react";
+
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+
 import { useWebSocketContext } from "../webSocketContext";
 import { ChatMessageType } from "@/lib/types";
-import ChatMessageComponent from "./chatMessage";
 import { flushSync } from "react-dom";
+
+import ChatMessageComponent from "./chatMessage";
 import ChatSendForm from "./chatSendForm";
 
 type ChatWindowProps = {
@@ -13,6 +16,7 @@ type ChatWindowProps = {
 export default function ChatWindow({ username = "User" }: ChatWindowProps) {
   const DEFAULT_MAX_VISIBLE_MESSAGES = 20;
   const MAX_MESSAGES_CAP = 40;
+  const LOCAL_STORAGE_CHAT_KEY = "chatMessages";
 
   const { isConnected, send, onMessage, onOpen, onClose, onError } =
     useWebSocketContext();
@@ -43,46 +47,6 @@ export default function ChatWindow({ username = "User" }: ChatWindowProps) {
   // =========== //
   //   EFFECTS   //
   // =========== //
-  // Assiging random Username
-  useEffect(() => {
-    if (userName === "User")
-      setUsername(`User${Math.floor(Math.random() * 1000)}`);
-  }, []);
-
-  // Registering new message callback
-  useEffect(() => {
-    const unsubOnMessage = onMessage((event) => {
-      const newMessage: ChatMessageType = JSON.parse(event.data);
-      flushSync(() => {
-        setChatMessages((prevMessages) =>
-          prevMessages
-            ? [...[...prevMessages.slice(-MAX_MESSAGES_CAP + 1), newMessage]]
-            : [newMessage]
-        );
-      });
-      scrollToLastMessage();
-    });
-
-    const unsubOnOpen = onOpen(() => {
-      // setIsConnected(true);
-    });
-
-    const unsubOnClose = onClose(() => {
-      // setIsConnected(false);
-    });
-
-    const unsubOnError = onError(() => {
-      // setIsConnected(false);
-    });
-
-    return () => {
-      unsubOnMessage();
-      unsubOnOpen();
-      unsubOnClose();
-      unsubOnError();
-    };
-  }, [onMessage, onOpen, onClose, onError]);
-
   // Registering event listeners for scrolling
   useEffect(() => {
     const handleScroll = () => {
@@ -111,6 +75,75 @@ export default function ChatWindow({ username = "User" }: ChatWindowProps) {
     };
   }, [listRef.current]);
 
+  // Assiging random Username
+  useLayoutEffect(() => {
+    if (userName === "User")
+      setUsername(`User${Math.floor(Math.random() * 1000)}`);
+
+    if (localStorage && localStorage.getItem(LOCAL_STORAGE_CHAT_KEY)) {
+      const oldMessages = localStorage.getItem(LOCAL_STORAGE_CHAT_KEY);
+
+      if (typeof oldMessages === "string" && oldMessages !== "") {
+        const parsedOldMessages = JSON.parse(oldMessages);
+        setChatMessages([...JSON.parse(parsedOldMessages)]);
+
+        // console.log("===========================");
+        // console.log([...JSON.parse(parsedOldMessages)]);
+      }
+    }
+
+    flushSync(() => {
+      if (containerRef.current) {
+        console.log("Kutwa");
+
+        const bottomOfView =
+          containerRef.current.scrollHeight - containerRef.current.clientHeight;
+        // containerRef.current.scrollTop = a;
+        containerRef.current.scrollTo(0, bottomOfView);
+        // setCurrentScrollTop(a);
+        scrollToLastMessage(true);
+      }
+    });
+  }, [containerRef.current]);
+
+  // Registering new message callback
+  useEffect(() => {
+    const unsubOnMessage = onMessage((event) => {
+      const newMessage: ChatMessageType = JSON.parse(event.data);
+      flushSync(() => {
+        setChatMessages((prevMessages) =>
+          prevMessages
+            ? [...[...prevMessages.slice(-MAX_MESSAGES_CAP + 1), newMessage]]
+            : [newMessage]
+        );
+      });
+      localStorage.setItem(
+        LOCAL_STORAGE_CHAT_KEY,
+        JSON.stringify(JSON.stringify(chatMessagesRef.current))
+      );
+      scrollToLastMessage();
+    });
+
+    const unsubOnOpen = onOpen(() => {
+      // setIsConnected(true);
+    });
+
+    const unsubOnClose = onClose(() => {
+      // setIsConnected(false);
+    });
+
+    const unsubOnError = onError(() => {
+      // setIsConnected(false);
+    });
+
+    return () => {
+      unsubOnMessage();
+      unsubOnOpen();
+      unsubOnClose();
+      unsubOnError();
+    };
+  }, [onMessage, onOpen, onClose, onError]);
+
   // Registering the ref to chatMessages
   useEffect(() => {
     chatMessagesRef.current = chatMessages;
@@ -137,33 +170,6 @@ export default function ChatWindow({ username = "User" }: ChatWindowProps) {
     return isAtBottom;
   };
 
-  const scrollToLastMessage = (forced = false) => {
-    const scrollThreshold = 50;
-
-    if (!listRef.current) return;
-
-    const lastMessage = listRef.current.lastElementChild;
-    let lastMessageHeight = 0;
-
-    if (lastMessage && lastMessage instanceof HTMLLIElement) {
-      lastMessageHeight = lastMessage.offsetHeight;
-
-      if (
-        isAtBottom(lastMessageHeight + scrollThreshold) ||
-        !hasScrolled ||
-        forced
-      ) {
-        isAutoScroll.current = true;
-
-        lastMessage.scrollIntoView({
-          behavior: "instant",
-          block: "end",
-          inline: "nearest",
-        });
-      }
-    }
-  };
-
   const handleSendMessage = (msg: string) => {
     send(msg);
   };
@@ -188,6 +194,33 @@ export default function ChatWindow({ username = "User" }: ChatWindowProps) {
     }
   };
 
+  const scrollToLastMessage = (forced = false) => {
+    const scrollThreshold = 50;
+    console.log("scrolluje");
+    if (!listRef.current) return;
+
+    const lastMessage = listRef.current.lastElementChild;
+    let lastMessageHeight = 0;
+
+    if (lastMessage && lastMessage instanceof HTMLLIElement) {
+      lastMessageHeight = lastMessage.offsetHeight;
+
+      if (
+        isAtBottom(lastMessageHeight + scrollThreshold) ||
+        !hasScrolled ||
+        forced
+      ) {
+        isAutoScroll.current = true;
+
+        lastMessage.scrollIntoView({
+          behavior: forced ? "smooth" : "instant",
+          block: "end",
+          inline: "nearest",
+        });
+      }
+    }
+  };
+
   const scrollBtnBaseClass =
     "absolute bottom-40 left-1/2 -translate-x-1/2 px-5 py-3 bg-slate-900/50 hover:bg-slate-900/75 rounded-full";
 
@@ -203,7 +236,7 @@ export default function ChatWindow({ username = "User" }: ChatWindowProps) {
         ref={containerRef}
       >
         {/* List of messages */}
-        {chatMessages && (
+        {chatMessages && chatMessages.length > 0 ? (
           <ul className="flex flex-col gap-2" ref={listRef}>
             {chatMessages.slice(-visibleMessages).map((msg) => (
               <li key={msg.id}>
@@ -211,7 +244,7 @@ export default function ChatWindow({ username = "User" }: ChatWindowProps) {
               </li>
             ))}
           </ul>
-        )}
+        ) : null}
       </div>
       <button
         className={scrollBtnClass}
